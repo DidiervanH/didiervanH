@@ -1,0 +1,20 @@
+{
+  "httpHeaders": [
+    {
+      "urls": ["https://github.com"],
+      "headers": {
+        "Accept": "text/html"
+      }
+    }
+  ],
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "30s",
+  "aliveStatusCodes": [200, 206],
+  "ignorePatterns": [
+    { "pattern": "^https://claude\\.ai" },
+    { "pattern": "^https://github\\.com/DidiervanH(\\?|$)" },
+    { "pattern": "^https://github\\.com/Nexus-Automations$" },
+    { "pattern": "^https://github\\.com/ellie-languages$" }
+  ]
+}

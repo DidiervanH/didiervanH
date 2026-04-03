@@ -1,0 +1,15 @@
+{
+  "name": "didiervanh",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "scripts": {
+    "check-links": "bunx markdown-link-check README.md --config .markdown-link-check.json"
+  }
+}
