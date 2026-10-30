@@ -57,6 +57,12 @@ for (const last = new Date(`${end}T00:00:00Z`); cursor <= last; cursor.setUTCDat
 
 const userInfo = aggregate.aggregateUserInfo(await client.fetchData(token, OWNER, MAX_REPOS));
 const emailCommitTotal = Object.values(counts).reduce((sum, count) => sum + count, 0);
+// The language pie draws (total commits - language commits) as "other", so
+// scale language counts to keep GitHub's proportions at the larger total.
+const languageScale = emailCommitTotal / Math.max(1, userInfo.totalCommitContributions);
+for (const language of userInfo.contributesLanguage) {
+  language.contributions = Math.round(language.contributions * languageScale);
+}
 userInfo.contributionCalendar = calendar;
 userInfo.totalCommitContributions = emailCommitTotal;
 userInfo.totalContributions =

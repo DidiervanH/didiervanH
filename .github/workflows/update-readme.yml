@@ -34,9 +34,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          git clone --quiet --depth 1 --branch 0.7.1 https://github.com/yoshi389111/github-profile-3d-contrib "$RUNNER_TEMP/profile-3d-contrib"
-          npm ci --ignore-scripts --prefix "$RUNNER_TEMP/profile-3d-contrib"
-          bun .github/scripts/render-3d-contrib.ts "$RUNNER_TEMP/profile-3d-contrib"
+          # github-profile-3d-contrib 0.7.1, pinned by commit so the code run with the token cannot change.
+          LIB="$RUNNER_TEMP/profile-3d-contrib"
+          git init --quiet "$LIB"
+          git -C "$LIB" fetch --quiet --depth 1 https://github.com/yoshi389111/github-profile-3d-contrib fd54cf20784ed9a86dc7be48bb5eb1f74e92b4f8
+          git -C "$LIB" checkout --quiet FETCH_HEAD
+          npm ci --ignore-scripts --prefix "$LIB"
+          bun .github/scripts/render-3d-contrib.ts "$LIB"
 
       - name: Commit and push
         run: |
