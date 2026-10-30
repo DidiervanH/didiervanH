@@ -164,6 +164,21 @@ function getCommitCountsByDate(
   return counts;
 }
 
+function getActivityThresholds(counts: Map<string, number>, levels: number): number[] {
+  const values = [...counts.values()].filter((count) => count > 0).sort((a, b) => a - b);
+  if (values.length === 0) return Array(levels).fill(0);
+  return Array.from({ length: levels }, (_, index) => {
+    const position = Math.ceil(((index + 1) / levels) * values.length) - 1;
+    return values[position];
+  });
+}
+
+function getActivityLevel(count: number, thresholds: number[]): number {
+  if (count === 0) return 0;
+  const level = thresholds.findIndex((threshold) => count <= threshold);
+  return level === -1 ? thresholds.length : level + 1;
+}
+
 function renderContributionCalendar(
   commits: Map<string, string>,
   startDate: string,
@@ -184,23 +199,18 @@ function renderContributionCalendar(
   const step = cell + gap;
   const left = 38;
   const top = 52;
-  const width = left + weekCount * step + 8;
+  const width = left + weekCount * step + 48;
   const height = top + 7 * step + 36;
   const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
-  const colors = ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"];
-  const colorFor = (count: number) => {
-    if (count === 0) return colors[0];
-    if (count < 3) return colors[1];
-    if (count < 6) return colors[2];
-    if (count < 10) return colors[3];
-    return colors[4];
-  };
+  const colors = ["#ebedf0", "#c6e48b", "#a6d96a", "#78c679", "#41ab5d", "#238443"];
+  const thresholds = getActivityThresholds(counts, colors.length - 1);
 
   const monthLabels: string[] = [];
   const firstMonth = new Date(
     Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth(), 1)
   );
   let previousMonthWeek = -1;
+  let previousLabelEnd = left - 6;
   for (
     const date = firstMonth;
     date <= rangeEnd;
@@ -208,7 +218,7 @@ function renderContributionCalendar(
   ) {
     const labelDate = date < rangeStart ? rangeStart : date;
     const week = Math.floor((labelDate.getTime() - gridStart.getTime()) / 604800000);
-    if (week > previousMonthWeek) {
+    if (week >= previousMonthWeek) {
       const monthName = date.toLocaleString("en", {
         month: "short",
         timeZone: "UTC",
@@ -218,9 +228,10 @@ function renderContributionCalendar(
         date.getUTCMonth() === rangeEnd.getUTCMonth()
           ? `${monthName} '${String(date.getUTCFullYear()).slice(-2)}`
           : monthName;
-      monthLabels.push(
-        `<text x="${left + week * step}" y="38" class="month">${label}</text>`
-      );
+      const naturalX = left + week * step;
+      const labelX = Math.max(naturalX, previousLabelEnd + 6);
+      monthLabels.push(`<text x="${labelX}" y="38" class="month">${label}</text>`);
+      previousLabelEnd = labelX + label.length * 6;
       previousMonthWeek = week;
     }
   }
@@ -239,7 +250,7 @@ function renderContributionCalendar(
     const x = left + week * step;
     const y = top + weekday * step;
     cells.push(
-      `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2" fill="${colorFor(count)}"><title>${dateKey}: ${count} ${count === 1 ? "commit" : "commits"}</title></rect>`
+      `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2" fill="${colors[getActivityLevel(count, thresholds)]}"><title>${dateKey}: ${count} ${count === 1 ? "commit" : "commits"}</title></rect>`
     );
   }
 
@@ -247,7 +258,7 @@ function renderContributionCalendar(
 <title id="title">Email-matched GitHub commits over the last 12 months</title>
 <desc id="desc">${total} commits authored with one of the linked email addresses from ${startDate} through ${endDate}, grouped by author date.</desc>
 <style>text{font-family:Arial,sans-serif;fill:#57606a}.total{font-size:16px;font-weight:600;fill:#24292f}.month,.day{font-size:10px}</style>
-<text x="0" y="20" class="total">${total} matching commits · ${startDate} to ${endDate}</text>
+<text x="8" y="20" class="total">${total} matching commits · ${startDate} to ${endDate}</text>
 ${monthLabels.join("")}${dayLabels}${cells.join("")}
 </svg>`;
 }
@@ -268,16 +279,17 @@ function renderIsometricContributionCalendar(
   const weekCount = totalDays / 7;
   const unitX = 13;
   const unitY = 7;
-  const cubeHeight = 10;
+  const cubeHeight = 6;
   const left = 76;
   const gridTop = 170;
   const width = left + (weekCount + 6) * unitX + 44;
   const legendY = gridTop + weekCount * unitY + 24;
   const height = legendY + 28;
   const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
-  const topColors = ["#ebedf0", "#d9f99d", "#a3e635", "#65a30d", "#3f7d20", "#14532d"];
-  const leftColors = ["#d0d7de", "#a3c172", "#7fae44", "#4f8c26", "#32651d", "#0f4225"];
-  const rightColors = ["#e5e7eb", "#c2df7b", "#8fc52f", "#559b13", "#356c1b", "#0b3b20"];
+  const topColors = ["#ebedf0", "#c6e48b", "#a6d96a", "#78c679", "#41ab5d", "#238443"];
+  const leftColors = ["#d0d7de", "#a5c36c", "#85b55a", "#65a653", "#428b55", "#286b49"];
+  const rightColors = ["#e5e7eb", "#b9d87a", "#93c45d", "#71ad50", "#4b9251", "#32784a"];
+  const thresholds = getActivityThresholds(counts, topColors.length - 1);
   const points = (vertices: Array<[number, number]>) =>
     vertices.map(([x, y]) => `${x},${y}`).join(" ");
   const monthLabels: string[] = [];
@@ -285,6 +297,7 @@ function renderIsometricContributionCalendar(
     Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth(), 1)
   );
   let previousMonthWeek = -1;
+  let previousLabelEnd = left - 6;
   for (
     const date = firstMonth;
     date <= rangeEnd;
@@ -292,7 +305,7 @@ function renderIsometricContributionCalendar(
   ) {
     const labelDate = date < rangeStart ? rangeStart : date;
     const week = Math.floor((labelDate.getTime() - gridStart.getTime()) / 604800000);
-    if (week > previousMonthWeek) {
+    if (week >= previousMonthWeek) {
       const monthName = date.toLocaleString("en", {
         month: "short",
         timeZone: "UTC",
@@ -302,9 +315,10 @@ function renderIsometricContributionCalendar(
         date.getUTCMonth() === rangeEnd.getUTCMonth()
           ? `${monthName} '${String(date.getUTCFullYear()).slice(-2)}`
           : monthName;
-      monthLabels.push(
-        `<text x="${left + week * unitX}" y="58" class="month">${label}</text>`
-      );
+      const naturalX = left + week * unitX;
+      const labelX = Math.max(naturalX, previousLabelEnd + 6);
+      monthLabels.push(`<text x="${labelX}" y="58" class="month">${label}</text>`);
+      previousLabelEnd = labelX + label.length * 6;
       previousMonthWeek = week;
     }
   }
@@ -341,7 +355,7 @@ function renderIsometricContributionCalendar(
   const cubes = activeCells.map(({ date, count, week, weekday }) => {
     const x = left + (week + weekday) * unitX;
     const y = gridTop + (week - weekday) * unitY;
-    const level = count < 3 ? 1 : count < 6 ? 2 : count < 10 ? 3 : count < 20 ? 4 : 5;
+    const level = getActivityLevel(count, thresholds);
     const lift = level * cubeHeight;
     const base = [
       [x, y],
