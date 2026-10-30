@@ -60,4 +60,8 @@
 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DidiervanH/DidiervanH/output/profile-green-animate.svg" />
 <img alt="3D Contribution Calendar" src="https://raw.githubusercontent.com/DidiervanH/DidiervanH/output/profile-green-animate.svg" />
 </picture>
+
+#### Commits by linked email
+
+<img alt="2026 commits authored with linked email addresses" src="assets/email-contributions.svg" width="100%" />
 </div>

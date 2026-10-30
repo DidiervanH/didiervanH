@@ -1,7 +1,14 @@
-import { writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
 
 const OWNER = "DidiervanH";
 const ORGS = ["Nexus-Automations", "ellie-languages"] as const;
+const CONTRIBUTION_EMAILS = [
+  "didier@get-ellie.com",
+  "didiervanhooren@hotmail.com",
+  "didier@nexus-automations.de",
+] as const;
+const CONTRIBUTION_YEAR = new Date().getUTCFullYear();
+const SEARCH_RESULT_LIMIT = 1000;
 
 interface Repo {
   name: string;
@@ -11,6 +18,182 @@ interface Repo {
   archived: boolean;
   private: boolean;
   pushed_at: string;
+}
+
+interface CommitSearchResult {
+  total_count: number;
+  incomplete_results: boolean;
+  items: Array<{
+    sha: string;
+    commit: { author: { date: string } | null };
+  }>;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchCommitSearchPage(
+  query: string,
+  page: number,
+  token: string
+): Promise<CommitSearchResult> {
+  const url = new URL("https://api.github.com/search/commits");
+  url.searchParams.set("q", query);
+  url.searchParams.set("per_page", "100");
+  url.searchParams.set("page", String(page));
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`GitHub commit search failed (${res.status}): ${detail}`);
+  }
+  return (await res.json()) as CommitSearchResult;
+}
+
+async function fetchEmailCommits(
+  email: string,
+  start: string,
+  end: string,
+  token: string,
+  commits: Map<string, string>
+): Promise<void> {
+  const query = `author-email:${email} author-date:${start}..${end}`;
+  // GitHub's search API caps a query at 1,000 results. Split saturated date
+  // ranges recursively so every matching commit can be fetched.
+  await sleep(2200);
+  const firstPage = await fetchCommitSearchPage(query, 1, token);
+  if (firstPage.incomplete_results) {
+    throw new Error(
+      `GitHub returned incomplete commit search results for ${email} (${start}..${end}).`
+    );
+  }
+  if (firstPage.total_count >= SEARCH_RESULT_LIMIT) {
+    const startTime = Date.parse(`${start}T00:00:00Z`);
+    const endTime = Date.parse(`${end}T00:00:00Z`);
+    if (start === end) {
+      throw new Error(
+        `More than ${SEARCH_RESULT_LIMIT - 1} commits match ${email} on ${start}; cannot retrieve all results from GitHub search.`
+      );
+    }
+    const dayCount = Math.floor((endTime - startTime) / 86400000) + 1;
+    const middleTime = startTime + Math.floor(dayCount / 2) * 86400000;
+    const middle = new Date(middleTime).toISOString().slice(0, 10);
+    const dayBeforeMiddle = new Date(middleTime - 86400000)
+      .toISOString()
+      .slice(0, 10);
+    await fetchEmailCommits(email, start, dayBeforeMiddle, token, commits);
+    await fetchEmailCommits(email, middle, end, token, commits);
+    return;
+  }
+
+  const pages = Math.ceil(firstPage.total_count / 100);
+  for (let page = 1; page <= pages; page++) {
+    const result =
+      page === 1
+        ? firstPage
+        : await fetchCommitSearchPage(query, page, token);
+    if (result.incomplete_results) {
+      throw new Error(
+        `GitHub returned incomplete commit search results for ${email} (${start}..${end}).`
+      );
+    }
+    for (const item of result.items) {
+      const authoredAt = item.commit.author?.date;
+      if (authoredAt) commits.set(item.sha, authoredAt.slice(0, 10));
+    }
+    if (page < pages) await sleep(2200);
+  }
+}
+
+function renderContributionCalendar(
+  commits: Map<string, string>,
+  year: number
+): string {
+  const counts = new Map<string, number>();
+  for (const date of commits.values()) {
+    if (date.startsWith(`${year}-`)) {
+      counts.set(date, (counts.get(date) ?? 0) + 1);
+    }
+  }
+
+  const firstDay = new Date(Date.UTC(year, 0, 1));
+  const start = new Date(firstDay);
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+  const lastDay = new Date(Date.UTC(year, 11, 31));
+  const totalDays = Math.round((lastDay.getTime() - start.getTime()) / 86400000) + 1;
+  const weekCount = Math.ceil(totalDays / 7);
+  const cell = 10;
+  const gap = 3;
+  const step = cell + gap;
+  const left = 38;
+  const top = 52;
+  const width = left + weekCount * step + 8;
+  const height = top + 7 * step + 36;
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  const colors = ["#ebedf0", "#9be9a8", "#40c463", "#30a14e", "#216e39"];
+  const colorFor = (count: number) => {
+    if (count === 0) return colors[0];
+    if (count < 3) return colors[1];
+    if (count < 6) return colors[2];
+    if (count < 10) return colors[3];
+    return colors[4];
+  };
+
+  const monthLabels = Array.from({ length: 12 }, (_, month) => {
+    const date = new Date(Date.UTC(year, month, 1));
+    const week = Math.floor((date.getTime() - start.getTime()) / 604800000);
+    return `<text x="${left + week * step}" y="38" class="month">${date.toLocaleString("en", { month: "short", timeZone: "UTC" })}</text>`;
+  }).join("");
+  const dayLabels = ["Mon", "Wed", "Fri"]
+    .map((label, i) => `<text x="0" y="${top + (i * 2 + 1) * step + 8}" class="day">${label}</text>`)
+    .join("");
+
+  const cells: string[] = [];
+  for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
+    const date = new Date(start.getTime() + dayIndex * 86400000);
+    if (date.getUTCFullYear() !== year) continue;
+    const dateKey = date.toISOString().slice(0, 10);
+    const count = counts.get(dateKey) ?? 0;
+    const week = Math.floor(dayIndex / 7);
+    const weekday = date.getUTCDay();
+    const x = left + week * step;
+    const y = top + weekday * step;
+    cells.push(
+      `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" rx="2" fill="${colorFor(count)}"><title>${dateKey}: ${count} ${count === 1 ? "commit" : "commits"}</title></rect>`
+    );
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
+<title id="title">${year} email-matched GitHub commits</title>
+<desc id="desc">${total} commits authored with one of the linked email addresses, grouped by author date.</desc>
+<style>text{font-family:Arial,sans-serif;fill:#57606a}.total{font-size:16px;font-weight:600;fill:#24292f}.month,.day{font-size:10px}</style>
+<text x="0" y="20" class="total">${total} matching commits in ${year}</text>
+${monthLabels}${dayLabels}${cells.join("")}
+</svg>`;
+}
+
+async function generateEmailContributionCalendar(): Promise<number> {
+  const token = process.env.GH_TOKEN;
+  if (!token) throw new Error("GH_TOKEN is required to search commit author emails.");
+
+  const commits = new Map<string, string>();
+  const start = `${CONTRIBUTION_YEAR}-01-01`;
+  const end = `${CONTRIBUTION_YEAR}-12-31`;
+  for (const email of CONTRIBUTION_EMAILS) {
+    await fetchEmailCommits(email, start, end, token, commits);
+  }
+
+  mkdirSync("assets", { recursive: true });
+  writeFileSync(
+    "assets/email-contributions.svg",
+    renderContributionCalendar(commits, CONTRIBUTION_YEAR)
+  );
+  return commits.size;
 }
 
 async function fetchRepos(
@@ -147,9 +330,14 @@ ${orgSections}
 <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/${OWNER}/${OWNER}/output/profile-green-animate.svg" />
 <img alt="3D Contribution Calendar" src="https://raw.githubusercontent.com/${OWNER}/${OWNER}/output/profile-green-animate.svg" />
 </picture>
+
+#### Commits by linked email
+
+<img alt="${CONTRIBUTION_YEAR} commits authored with linked email addresses" src="assets/email-contributions.svg" width="100%" />
 </div>
 `;
 
+const emailCommitCount = await generateEmailContributionCalendar();
 writeFileSync("README.md", readme);
 
 const personalCount = personalRepos.filter(
@@ -161,5 +349,5 @@ const orgCount = orgRepos.reduce(
   0
 );
 console.log(
-  `Generated README.md with ${personalCount} personal and ${orgCount} org repos`
+  `Generated README.md with ${personalCount} personal and ${orgCount} org repos; ${emailCommitCount} email-matched commits in ${CONTRIBUTION_YEAR}`
 );
