@@ -30,11 +30,19 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: bun .github/scripts/generate-readme.ts
 
+      - name: Render 3D contribution calendar
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git clone --quiet --depth 1 --branch 0.7.1 https://github.com/yoshi389111/github-profile-3d-contrib "$RUNNER_TEMP/profile-3d-contrib"
+          npm ci --ignore-scripts --prefix "$RUNNER_TEMP/profile-3d-contrib"
+          bun .github/scripts/render-3d-contrib.ts "$RUNNER_TEMP/profile-3d-contrib"
+
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md assets/email-contributions.svg assets/email-contributions-3d.svg assets/email-contribution-stats.svg
+          git add README.md assets/email-contributions.svg assets/email-contribution-stats.svg assets/email-commit-days.json assets/profile-green-animate.svg assets/profile-night-view.svg
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "Update README"
           git push

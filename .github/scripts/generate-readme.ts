@@ -263,131 +263,6 @@ ${monthLabels.join("")}${dayLabels}${cells.join("")}
 </svg>`;
 }
 
-function renderIsometricContributionCalendar(
-  commits: Map<string, string>,
-  startDate: string,
-  endDate: string
-): string {
-  const counts = getCommitCountsByDate(commits, startDate, endDate);
-  const rangeStart = new Date(`${startDate}T00:00:00Z`);
-  const rangeEnd = new Date(`${endDate}T00:00:00Z`);
-  const gridStart = new Date(rangeStart);
-  gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
-  const gridEnd = new Date(rangeEnd);
-  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
-  const totalDays = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
-  const weekCount = totalDays / 7;
-  const unitX = 13;
-  const unitY = 7;
-  const cubeHeight = 6;
-  const left = 76;
-  const gridTop = 170;
-  const width = left + (weekCount + 6) * unitX + 44;
-  const legendY = gridTop + weekCount * unitY + 24;
-  const height = legendY + 28;
-  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
-  const topColors = ["#ebedf0", "#c6e48b", "#a6d96a", "#78c679", "#41ab5d", "#238443"];
-  const leftColors = ["#d0d7de", "#a5c36c", "#85b55a", "#65a653", "#428b55", "#286b49"];
-  const rightColors = ["#e5e7eb", "#b9d87a", "#93c45d", "#71ad50", "#4b9251", "#32784a"];
-  const thresholds = getActivityThresholds(counts, topColors.length - 1);
-  const points = (vertices: Array<[number, number]>) =>
-    vertices.map(([x, y]) => `${x},${y}`).join(" ");
-  const monthLabels: string[] = [];
-  const firstMonth = new Date(
-    Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth(), 1)
-  );
-  let previousMonthWeek = -1;
-  let previousLabelEnd = left - 6;
-  for (
-    const date = firstMonth;
-    date <= rangeEnd;
-    date.setUTCMonth(date.getUTCMonth() + 1)
-  ) {
-    const labelDate = date < rangeStart ? rangeStart : date;
-    const week = Math.floor((labelDate.getTime() - gridStart.getTime()) / 604800000);
-    if (week >= previousMonthWeek) {
-      const monthName = date.toLocaleString("en", {
-        month: "short",
-        timeZone: "UTC",
-      });
-      const label =
-        date.getUTCMonth() === rangeStart.getUTCMonth() ||
-        date.getUTCMonth() === rangeEnd.getUTCMonth()
-          ? `${monthName} '${String(date.getUTCFullYear()).slice(-2)}`
-          : monthName;
-      const naturalX = left + week * unitX;
-      const labelX = Math.max(naturalX, previousLabelEnd + 6);
-      monthLabels.push(`<text x="${labelX}" y="58" class="month">${label}</text>`);
-      previousLabelEnd = labelX + label.length * 6;
-      previousMonthWeek = week;
-    }
-  }
-
-  const floorCells: string[] = [];
-  const activeCells: Array<{
-    date: string;
-    count: number;
-    week: number;
-    weekday: number;
-  }> = [];
-  for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
-    const date = new Date(gridStart.getTime() + dayIndex * 86400000);
-    const dateKey = date.toISOString().slice(0, 10);
-    if (dateKey < startDate || dateKey > endDate) continue;
-    const week = Math.floor(dayIndex / 7);
-    const weekday = date.getUTCDay();
-    const x = left + (week + weekday) * unitX;
-    const y = gridTop + (week - weekday) * unitY;
-    const cellPoints: Array<[number, number]> = [
-      [x, y],
-      [x + unitX, y + unitY],
-      [x + 2 * unitX, y],
-      [x + unitX, y - unitY],
-    ];
-    floorCells.push(
-      `<polygon points="${points(cellPoints)}" fill="#f6f8fa" stroke="#c8ccd0" stroke-width="1"/>`
-    );
-    const count = counts.get(dateKey) ?? 0;
-    if (count > 0) activeCells.push({ date: dateKey, count, week, weekday });
-  }
-
-  activeCells.sort((a, b) => a.week + a.weekday - (b.week + b.weekday));
-  const cubes = activeCells.map(({ date, count, week, weekday }) => {
-    const x = left + (week + weekday) * unitX;
-    const y = gridTop + (week - weekday) * unitY;
-    const level = getActivityLevel(count, thresholds);
-    const lift = level * cubeHeight;
-    const base = [
-      [x, y],
-      [x + unitX, y + unitY],
-      [x + 2 * unitX, y],
-      [x + unitX, y - unitY],
-    ] as Array<[number, number]>;
-    const top = base.map(([px, py]) => [px, py - lift] as [number, number]);
-    return `<g>
-<polygon points="${points([base[1], base[2], top[2], top[1]])}" fill="${leftColors[level]}"/>
-<polygon points="${points([base[2], base[3], top[3], top[2]])}" fill="${rightColors[level]}"/>
-<polygon points="${points(top)}" fill="${topColors[level]}" stroke="#ffffff" stroke-width="0.7"><title>${date}: ${count} ${count === 1 ? "commit" : "commits"}</title></polygon>
-</g>`;
-  });
-
-  const legend = ["#ebedf0", "#d9f99d", "#a3e635", "#65a30d", "#3f7d20", "#14532d"]
-    .map((color, level) => {
-      const x = width - 165 + level * 15;
-      return `<rect x="${x}" y="${legendY}" width="11" height="11" rx="2" fill="${color}"/>`;
-    })
-    .join("");
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
-<title id="title">Isometric linked-email commit calendar</title>
-<desc id="desc">${total} commits authored with one of the linked email addresses from ${startDate} through ${endDate}.</desc>
-<style>text{font-family:Arial,sans-serif;fill:#57606a}.total{font-size:16px;font-weight:600;fill:#24292f}.month,.legend-label{font-size:10px}</style>
-<text x="0" y="24" class="total">${total.toLocaleString("en")} matching commits · ${startDate} to ${endDate}</text>
-${monthLabels.join("")}${floorCells.join("")}${cubes.join("")}
-<text x="${width - 195}" y="${legendY + 10}" class="legend-label">Less</text>${legend}<text x="${width - 58}" y="${legendY + 10}" class="legend-label">More</text>
-</svg>`;
-}
-
 function renderContributionStats(
   commits: Map<string, string>,
   startDate: string,
@@ -485,9 +360,16 @@ async function generateEmailContributionCalendar(): Promise<number> {
     "assets/email-contributions.svg",
     renderContributionCalendar(commits, CONTRIBUTION_START, CONTRIBUTION_END)
   );
+  // Day counts for render-3d-contrib.ts, which draws the 3D calendar.
   writeFileSync(
-    "assets/email-contributions-3d.svg",
-    renderIsometricContributionCalendar(commits, CONTRIBUTION_START, CONTRIBUTION_END)
+    "assets/email-commit-days.json",
+    JSON.stringify({
+      start: CONTRIBUTION_START,
+      end: CONTRIBUTION_END,
+      counts: Object.fromEntries(
+        getCommitCountsByDate(commits, CONTRIBUTION_START, CONTRIBUTION_END)
+      ),
+    })
   );
   writeFileSync(
     "assets/email-contribution-stats.svg",
@@ -619,7 +501,11 @@ ${orgSections}
 ### Contributions
 
 <div align="center">
-<img alt="Isometric contribution calendar from linked-email commits over the last 12 months" src="assets/email-contributions-3d.svg" width="100%" />
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/profile-night-view.svg" />
+<source media="(prefers-color-scheme: light)" srcset="assets/profile-green-animate.svg" />
+<img alt="3D contribution calendar from linked-email commits over the last 12 months" src="assets/profile-green-animate.svg" />
+</picture>
 
 #### Commits by linked email
 
