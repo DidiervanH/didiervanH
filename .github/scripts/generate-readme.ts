@@ -9,6 +9,8 @@ const CONTRIBUTION_EMAILS = [
 ] as const;
 const CONTRIBUTION_YEAR = new Date().getUTCFullYear();
 const SEARCH_RESULT_LIMIT = 1000;
+const SEARCH_REQUEST_DELAY_MS = 5000;
+const MAX_RATE_LIMIT_RETRIES = 5;
 
 interface Repo {
   name: string;
@@ -41,18 +43,41 @@ async function fetchCommitSearchPage(
   url.searchParams.set("per_page", "100");
   url.searchParams.set("page", String(page));
 
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
-  if (!res.ok) {
+  for (let retry = 0; ; retry++) {
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (res.ok) return (await res.json()) as CommitSearchResult;
+
     const detail = await res.text();
-    throw new Error(`GitHub commit search failed (${res.status}): ${detail}`);
+    const rateLimited =
+      (res.status === 403 || res.status === 429) &&
+      (/rate limit/i.test(detail) || res.headers.get("x-ratelimit-remaining") === "0");
+    if (!rateLimited || retry >= MAX_RATE_LIMIT_RETRIES) {
+      throw new Error(`GitHub commit search failed (${res.status}): ${detail}`);
+    }
+
+    const retryAfter = res.headers.get("retry-after");
+    const retryAfterSeconds = Number(retryAfter);
+    const resetHeader = res.headers.get("x-ratelimit-reset");
+    const resetAt = Number(resetHeader);
+    const waitMs =
+      retryAfter !== null && Number.isFinite(retryAfterSeconds)
+        ? retryAfterSeconds * 1000
+        : res.headers.get("x-ratelimit-remaining") === "0" &&
+            resetHeader !== null &&
+            Number.isFinite(resetAt)
+          ? Math.max(1000, resetAt * 1000 - Date.now() + 1000)
+          : 60000 * 2 ** retry;
+    console.warn(
+      `GitHub rate limit reached; waiting ${Math.ceil(waitMs / 1000)} seconds before retry ${retry + 1}/${MAX_RATE_LIMIT_RETRIES}.`
+    );
+    await sleep(waitMs);
   }
-  return (await res.json()) as CommitSearchResult;
 }
 
 async function fetchEmailCommits(
@@ -65,7 +90,7 @@ async function fetchEmailCommits(
   const query = `author-email:${email} author-date:${start}..${end}`;
   // GitHub's search API caps a query at 1,000 results. Split saturated date
   // ranges recursively so every matching commit can be fetched.
-  await sleep(2200);
+  await sleep(SEARCH_REQUEST_DELAY_MS);
   const firstPage = await fetchCommitSearchPage(query, 1, token);
   if (firstPage.incomplete_results) {
     throw new Error(
@@ -106,7 +131,7 @@ async function fetchEmailCommits(
       const authoredAt = item.commit.author?.date;
       if (authoredAt) commits.set(item.sha, authoredAt.slice(0, 10));
     }
-    if (page < pages) await sleep(2200);
+    if (page < pages) await sleep(SEARCH_REQUEST_DELAY_MS);
   }
 }
 
