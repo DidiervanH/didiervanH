@@ -20,16 +20,10 @@
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%233178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![Python](https://img.shields.io/badge/Python-%233776AB?style=flat&logo=python&logoColor=white)](https://www.python.org) [![Bun](https://img.shields.io/badge/Bun-%23000000?style=flat&logo=bun&logoColor=white)](https://bun.sh) [![Claude](https://img.shields.io/badge/Claude-%23D97757?style=flat&logo=claude&logoColor=white)](https://claude.ai) [![Vue](https://img.shields.io/badge/Vue-%234FC08D?style=flat&logo=vuedotjs&logoColor=white)](https://vuejs.org) [![Astro](https://img.shields.io/badge/Astro-%23BC52EE?style=flat&logo=astro&logoColor=white)](https://astro.build) [![Docker](https://img.shields.io/badge/Docker-%232496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com) [![Tauri](https://img.shields.io/badge/Tauri-%23FFC131?style=flat&logo=tauri&logoColor=black)](https://tauri.app) [![PostHog](https://img.shields.io/badge/PostHog-%231D4AFF?style=flat&logo=posthog&logoColor=white)](https://posthog.com) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%234169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org) [![Playwright](https://img.shields.io/badge/Playwright-%232EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev)
 
-### GitHub Stats
+### Email-linked Commit Stats
 
 <div align="center">
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="https://streak-stats.demolab.com?user=DidiervanH&theme=tokyonight&hide_border=true&background=00000000" />
-<source media="(prefers-color-scheme: light)" srcset="https://streak-stats.demolab.com?user=DidiervanH&theme=default&hide_border=true&background=00000000" />
-<img alt="GitHub Streak" src="https://streak-stats.demolab.com?user=DidiervanH&theme=default&hide_border=true&background=00000000" />
-</picture>
-
+<img alt="Rolling 12-month statistics for commits authored with linked email addresses" src="assets/email-contribution-stats.svg" width="100%" />
 </div>
 
 ### Projects
@@ -63,5 +57,5 @@
 
 #### Commits by linked email
 
-<img alt="2026 commits authored with linked email addresses" src="assets/email-contributions.svg" width="100%" />
+<img alt="Commits authored with linked email addresses over the last 12 months" src="assets/email-contributions.svg" width="100%" />
 </div>

@@ -7,7 +7,22 @@ const CONTRIBUTION_EMAILS = [
   "didiervanhooren@hotmail.com",
   "didier@nexus-automations.de",
 ] as const;
-const CONTRIBUTION_YEAR = new Date().getUTCFullYear();
+const today = new Date();
+const CONTRIBUTION_END_DATE = new Date(
+  Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+);
+const priorYear = CONTRIBUTION_END_DATE.getUTCFullYear() - 1;
+const priorMonth = CONTRIBUTION_END_DATE.getUTCMonth();
+const priorMonthLastDay = new Date(Date.UTC(priorYear, priorMonth + 1, 0)).getUTCDate();
+const CONTRIBUTION_START_DATE = new Date(
+  Date.UTC(
+    priorYear,
+    priorMonth,
+    Math.min(CONTRIBUTION_END_DATE.getUTCDate(), priorMonthLastDay)
+  )
+);
+const CONTRIBUTION_START = CONTRIBUTION_START_DATE.toISOString().slice(0, 10);
+const CONTRIBUTION_END = CONTRIBUTION_END_DATE.toISOString().slice(0, 10);
 const SEARCH_RESULT_LIMIT = 1000;
 const SEARCH_REQUEST_DELAY_MS = 5000;
 const MAX_RATE_LIMIT_RETRIES = 5;
@@ -135,23 +150,35 @@ async function fetchEmailCommits(
   }
 }
 
-function renderContributionCalendar(
+function getCommitCountsByDate(
   commits: Map<string, string>,
-  year: number
-): string {
+  startDate: string,
+  endDate: string
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const date of commits.values()) {
-    if (date.startsWith(`${year}-`)) {
+    if (date >= startDate && date <= endDate) {
       counts.set(date, (counts.get(date) ?? 0) + 1);
     }
   }
+  return counts;
+}
 
-  const firstDay = new Date(Date.UTC(year, 0, 1));
-  const start = new Date(firstDay);
-  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
-  const lastDay = new Date(Date.UTC(year, 11, 31));
-  const totalDays = Math.round((lastDay.getTime() - start.getTime()) / 86400000) + 1;
-  const weekCount = Math.ceil(totalDays / 7);
+function renderContributionCalendar(
+  commits: Map<string, string>,
+  startDate: string,
+  endDate: string
+): string {
+  const counts = getCommitCountsByDate(commits, startDate, endDate);
+
+  const rangeStart = new Date(`${startDate}T00:00:00Z`);
+  const rangeEnd = new Date(`${endDate}T00:00:00Z`);
+  const gridStart = new Date(rangeStart);
+  gridStart.setUTCDate(gridStart.getUTCDate() - gridStart.getUTCDay());
+  const gridEnd = new Date(rangeEnd);
+  gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - gridEnd.getUTCDay()));
+  const totalDays = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
+  const weekCount = totalDays / 7;
   const cell = 10;
   const gap = 3;
   const step = cell + gap;
@@ -169,20 +196,43 @@ function renderContributionCalendar(
     return colors[4];
   };
 
-  const monthLabels = Array.from({ length: 12 }, (_, month) => {
-    const date = new Date(Date.UTC(year, month, 1));
-    const week = Math.floor((date.getTime() - start.getTime()) / 604800000);
-    return `<text x="${left + week * step}" y="38" class="month">${date.toLocaleString("en", { month: "short", timeZone: "UTC" })}</text>`;
-  }).join("");
+  const monthLabels: string[] = [];
+  const firstMonth = new Date(
+    Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth(), 1)
+  );
+  let previousMonthWeek = -1;
+  for (
+    const date = firstMonth;
+    date <= rangeEnd;
+    date.setUTCMonth(date.getUTCMonth() + 1)
+  ) {
+    const labelDate = date < rangeStart ? rangeStart : date;
+    const week = Math.floor((labelDate.getTime() - gridStart.getTime()) / 604800000);
+    if (week > previousMonthWeek) {
+      const monthName = date.toLocaleString("en", {
+        month: "short",
+        timeZone: "UTC",
+      });
+      const label =
+        date.getUTCMonth() === rangeStart.getUTCMonth() ||
+        date.getUTCMonth() === rangeEnd.getUTCMonth()
+          ? `${monthName} '${String(date.getUTCFullYear()).slice(-2)}`
+          : monthName;
+      monthLabels.push(
+        `<text x="${left + week * step}" y="38" class="month">${label}</text>`
+      );
+      previousMonthWeek = week;
+    }
+  }
   const dayLabels = ["Mon", "Wed", "Fri"]
     .map((label, i) => `<text x="0" y="${top + (i * 2 + 1) * step + 8}" class="day">${label}</text>`)
     .join("");
 
   const cells: string[] = [];
   for (let dayIndex = 0; dayIndex < totalDays; dayIndex++) {
-    const date = new Date(start.getTime() + dayIndex * 86400000);
-    if (date.getUTCFullYear() !== year) continue;
+    const date = new Date(gridStart.getTime() + dayIndex * 86400000);
     const dateKey = date.toISOString().slice(0, 10);
+    if (dateKey < startDate || dateKey > endDate) continue;
     const count = counts.get(dateKey) ?? 0;
     const week = Math.floor(dayIndex / 7);
     const weekday = date.getUTCDay();
@@ -194,11 +244,94 @@ function renderContributionCalendar(
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
-<title id="title">${year} email-matched GitHub commits</title>
-<desc id="desc">${total} commits authored with one of the linked email addresses, grouped by author date.</desc>
+<title id="title">Email-matched GitHub commits over the last 12 months</title>
+<desc id="desc">${total} commits authored with one of the linked email addresses from ${startDate} through ${endDate}, grouped by author date.</desc>
 <style>text{font-family:Arial,sans-serif;fill:#57606a}.total{font-size:16px;font-weight:600;fill:#24292f}.month,.day{font-size:10px}</style>
-<text x="0" y="20" class="total">${total} matching commits in ${year}</text>
-${monthLabels}${dayLabels}${cells.join("")}
+<text x="0" y="20" class="total">${total} matching commits · ${startDate} to ${endDate}</text>
+${monthLabels.join("")}${dayLabels}${cells.join("")}
+</svg>`;
+}
+
+function renderContributionStats(
+  commits: Map<string, string>,
+  startDate: string,
+  endDate: string
+): string {
+  const counts = getCommitCountsByDate(commits, startDate, endDate);
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const activeDays = new Set(counts.keys());
+  const dayKey = (date: Date) => date.toISOString().slice(0, 10);
+  const dayBeforeEnd = new Date(end);
+  dayBeforeEnd.setUTCDate(dayBeforeEnd.getUTCDate() - 1);
+  const streakAnchor = activeDays.has(endDate)
+    ? end
+    : dayBeforeEnd >= start && activeDays.has(dayKey(dayBeforeEnd))
+      ? dayBeforeEnd
+      : null;
+
+  let currentStreak = 0;
+  let currentStart = streakAnchor ? new Date(streakAnchor) : null;
+  if (streakAnchor && currentStart) {
+    const cursor = new Date(streakAnchor);
+    while (cursor >= start && activeDays.has(dayKey(cursor))) {
+      currentStreak++;
+      currentStart = new Date(cursor);
+      cursor.setUTCDate(cursor.getUTCDate() - 1);
+    }
+  }
+
+  let longestStreak = 0;
+  let longestStart: Date | null = null;
+  let longestEnd: Date | null = null;
+  let runLength = 0;
+  let runStart: Date | null = null;
+  for (const cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    if (activeDays.has(dayKey(cursor))) {
+      if (runLength === 0) runStart = new Date(cursor);
+      runLength++;
+      if (runLength > longestStreak) {
+        longestStreak = runLength;
+        longestStart = runStart ? new Date(runStart) : null;
+        longestEnd = new Date(cursor);
+      }
+    } else {
+      runLength = 0;
+      runStart = null;
+    }
+  }
+
+  const dateLabel = (date: Date) =>
+    date.toLocaleDateString("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  const currentPeriod =
+    currentStart && streakAnchor
+      ? `${dateLabel(currentStart)} – ${dateLabel(streakAnchor)}`
+      : "No current streak";
+  const longestPeriod =
+    longestStart && longestEnd
+      ? `${dateLabel(longestStart)} – ${dateLabel(longestEnd)}`
+      : "No active days in this period";
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 170" role="img" aria-labelledby="title desc">
+<title id="title">Linked-email commit totals and streaks</title>
+<desc id="desc">${total} commits from ${startDate} through ${endDate}. Current streak: ${currentStreak} days. Longest streak: ${longestStreak} days.</desc>
+<style>text{font-family:Arial,sans-serif;fill:#24292f}.value{font-size:38px;font-weight:700}.label{font-size:16px}.detail{font-size:13px;fill:#57606a}.accent{fill:#fb8500}</style>
+<line x1="300" y1="18" x2="300" y2="152" stroke="#d8dee4"/><line x1="600" y1="18" x2="600" y2="152" stroke="#d8dee4"/>
+<text x="150" y="70" text-anchor="middle" class="value">${total.toLocaleString("en")}</text>
+<text x="150" y="101" text-anchor="middle" class="label">Email-linked commits</text>
+<text x="150" y="128" text-anchor="middle" class="detail">${dateLabel(start)} – ${dateLabel(end)}</text>
+<text x="450" y="70" text-anchor="middle" class="value accent">${currentStreak}</text>
+<text x="450" y="101" text-anchor="middle" class="label accent">Current streak</text>
+<text x="450" y="128" text-anchor="middle" class="detail">${currentPeriod}</text>
+<text x="750" y="70" text-anchor="middle" class="value">${longestStreak}</text>
+<text x="750" y="101" text-anchor="middle" class="label">Longest streak</text>
+<text x="750" y="128" text-anchor="middle" class="detail">${longestPeriod}</text>
 </svg>`;
 }
 
@@ -207,16 +340,18 @@ async function generateEmailContributionCalendar(): Promise<number> {
   if (!token) throw new Error("GH_TOKEN is required to search commit author emails.");
 
   const commits = new Map<string, string>();
-  const start = `${CONTRIBUTION_YEAR}-01-01`;
-  const end = `${CONTRIBUTION_YEAR}-12-31`;
   for (const email of CONTRIBUTION_EMAILS) {
-    await fetchEmailCommits(email, start, end, token, commits);
+    await fetchEmailCommits(email, CONTRIBUTION_START, CONTRIBUTION_END, token, commits);
   }
 
   mkdirSync("assets", { recursive: true });
   writeFileSync(
     "assets/email-contributions.svg",
-    renderContributionCalendar(commits, CONTRIBUTION_YEAR)
+    renderContributionCalendar(commits, CONTRIBUTION_START, CONTRIBUTION_END)
+  );
+  writeFileSync(
+    "assets/email-contribution-stats.svg",
+    renderContributionStats(commits, CONTRIBUTION_START, CONTRIBUTION_END)
   );
   return commits.size;
 }
@@ -325,16 +460,10 @@ const readme = `<div align="center">
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-%233178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org) [![Python](https://img.shields.io/badge/Python-%233776AB?style=flat&logo=python&logoColor=white)](https://www.python.org) [![Bun](https://img.shields.io/badge/Bun-%23000000?style=flat&logo=bun&logoColor=white)](https://bun.sh) [![Claude](https://img.shields.io/badge/Claude-%23D97757?style=flat&logo=claude&logoColor=white)](https://claude.ai) [![Vue](https://img.shields.io/badge/Vue-%234FC08D?style=flat&logo=vuedotjs&logoColor=white)](https://vuejs.org) [![Astro](https://img.shields.io/badge/Astro-%23BC52EE?style=flat&logo=astro&logoColor=white)](https://astro.build) [![Docker](https://img.shields.io/badge/Docker-%232496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com) [![Tauri](https://img.shields.io/badge/Tauri-%23FFC131?style=flat&logo=tauri&logoColor=black)](https://tauri.app) [![PostHog](https://img.shields.io/badge/PostHog-%231D4AFF?style=flat&logo=posthog&logoColor=white)](https://posthog.com) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-%234169E1?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org) [![Playwright](https://img.shields.io/badge/Playwright-%232EAD33?style=flat&logo=playwright&logoColor=white)](https://playwright.dev)
 
-### GitHub Stats
+### Email-linked Commit Stats
 
 <div align="center">
-
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="https://streak-stats.demolab.com?user=${OWNER}&theme=tokyonight&hide_border=true&background=00000000" />
-<source media="(prefers-color-scheme: light)" srcset="https://streak-stats.demolab.com?user=${OWNER}&theme=default&hide_border=true&background=00000000" />
-<img alt="GitHub Streak" src="https://streak-stats.demolab.com?user=${OWNER}&theme=default&hide_border=true&background=00000000" />
-</picture>
-
+<img alt="Rolling 12-month statistics for commits authored with linked email addresses" src="assets/email-contribution-stats.svg" width="100%" />
 </div>
 
 ### Projects
@@ -358,7 +487,7 @@ ${orgSections}
 
 #### Commits by linked email
 
-<img alt="${CONTRIBUTION_YEAR} commits authored with linked email addresses" src="assets/email-contributions.svg" width="100%" />
+<img alt="Commits authored with linked email addresses over the last 12 months" src="assets/email-contributions.svg" width="100%" />
 </div>
 `;
 
@@ -374,5 +503,5 @@ const orgCount = orgRepos.reduce(
   0
 );
 console.log(
-  `Generated README.md with ${personalCount} personal and ${orgCount} org repos; ${emailCommitCount} email-matched commits in ${CONTRIBUTION_YEAR}`
+  `Generated README.md with ${personalCount} personal and ${orgCount} org repos; ${emailCommitCount} email-matched commits from ${CONTRIBUTION_START} to ${CONTRIBUTION_END}`
 );
