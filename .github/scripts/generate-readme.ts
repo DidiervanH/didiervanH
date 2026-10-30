@@ -66,7 +66,20 @@ async function fetchCommitSearchPage(
         "X-GitHub-Api-Version": "2022-11-28",
       },
     });
-    if (res.ok) return (await res.json()) as CommitSearchResult;
+    if (res.ok) {
+      const result = (await res.json()) as CommitSearchResult;
+      if (!result.incomplete_results) return result;
+      // Search timed out on GitHub's side; the same query usually completes on retry.
+      if (retry >= MAX_RATE_LIMIT_RETRIES) {
+        throw new Error(`GitHub returned incomplete commit search results for ${query} (page ${page}).`);
+      }
+      const waitMs = 10000 * 2 ** retry;
+      console.warn(
+        `GitHub returned incomplete results; waiting ${waitMs / 1000} seconds before retry ${retry + 1}/${MAX_RATE_LIMIT_RETRIES}.`
+      );
+      await sleep(waitMs);
+      continue;
+    }
 
     const detail = await res.text();
     const rateLimited =
@@ -107,11 +120,6 @@ async function fetchEmailCommits(
   // ranges recursively so every matching commit can be fetched.
   await sleep(SEARCH_REQUEST_DELAY_MS);
   const firstPage = await fetchCommitSearchPage(query, 1, token);
-  if (firstPage.incomplete_results) {
-    throw new Error(
-      `GitHub returned incomplete commit search results for ${email} (${start}..${end}).`
-    );
-  }
   if (firstPage.total_count >= SEARCH_RESULT_LIMIT) {
     const startTime = Date.parse(`${start}T00:00:00Z`);
     const endTime = Date.parse(`${end}T00:00:00Z`);
@@ -137,11 +145,6 @@ async function fetchEmailCommits(
       page === 1
         ? firstPage
         : await fetchCommitSearchPage(query, page, token);
-    if (result.incomplete_results) {
-      throw new Error(
-        `GitHub returned incomplete commit search results for ${email} (${start}..${end}).`
-      );
-    }
     for (const item of result.items) {
       const authoredAt = item.commit.author?.date;
       if (authoredAt) commits.set(item.sha, authoredAt.slice(0, 10));
