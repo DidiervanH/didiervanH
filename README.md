@@ -49,7 +49,11 @@
 ### Contributions
 
 <div align="center">
-<img alt="Isometric contribution calendar from linked-email commits over the last 12 months" src="assets/email-contributions-3d.svg" width="100%" />
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="assets/profile-night-view.svg" />
+<source media="(prefers-color-scheme: light)" srcset="assets/profile-green-animate.svg" />
+<img alt="3D contribution calendar from linked-email commits over the last 12 months" src="assets/profile-green-animate.svg" />
+</picture>
 
 #### Commits by linked email
 
