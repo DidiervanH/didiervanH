@@ -49,11 +49,7 @@
 ### Contributions
 
 <div align="center">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/DidiervanH/DidiervanH/output/profile-night-view.svg" />
-<source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/DidiervanH/DidiervanH/output/profile-green-animate.svg" />
-<img alt="3D Contribution Calendar" src="https://raw.githubusercontent.com/DidiervanH/DidiervanH/output/profile-green-animate.svg" />
-</picture>
+<img alt="Isometric contribution calendar from linked-email commits over the last 12 months" src="assets/email-contributions-3d.svg" width="100%" />
 
 #### Commits by linked email
 

@@ -34,7 +34,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md assets/email-contributions.svg assets/email-contribution-stats.svg
+          git add README.md assets/email-contributions.svg assets/email-contributions-3d.svg assets/email-contribution-stats.svg
           git diff --staged --quiet && echo "No changes" && exit 0
           git commit -m "Update README"
           git push
