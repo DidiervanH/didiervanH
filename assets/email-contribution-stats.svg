@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 170" role="img" aria-labelledby="title desc">
 <title id="title">Linked-email commit totals and streaks</title>
-<desc id="desc">5057 commits from 2025-10-30 through 2026-10-30. Current streak: 12 days. Longest streak: 33 days.</desc>
+<desc id="desc">5059 commits from 2025-10-31 through 2026-10-31. Current streak: 12 days. Longest streak: 33 days.</desc>
 <style>text{font-family:Arial,sans-serif;fill:#24292f}.value{font-size:38px;font-weight:700}.label{font-size:16px}.detail{font-size:13px;fill:#57606a}.accent{fill:#fb8500}</style>
 <line x1="300" y1="18" x2="300" y2="152" stroke="#d8dee4"/><line x1="600" y1="18" x2="600" y2="152" stroke="#d8dee4"/>
-<text x="150" y="70" text-anchor="middle" class="value">5,057</text>
+<text x="150" y="70" text-anchor="middle" class="value">5,059</text>
 <text x="150" y="101" text-anchor="middle" class="label">Email-linked commits</text>
-<text x="150" y="128" text-anchor="middle" class="detail">Oct 30, 2025 – Oct 30, 2026</text>
+<text x="150" y="128" text-anchor="middle" class="detail">Oct 31, 2025 – Oct 31, 2026</text>
 <text x="450" y="70" text-anchor="middle" class="value accent">12</text>
 <text x="450" y="101" text-anchor="middle" class="label accent">Current streak</text>
 <text x="450" y="128" text-anchor="middle" class="detail">Oct 19, 2026 – Oct 30, 2026</text>
